@@ -1,0 +1,275 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+  --titlebar-height: 32px;
+  --radius: 0.5rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.145 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.145 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.396 0.141 25.723);
+  --border: oklch(0.269 0 0);
+  --input: oklch(0.269 0 0);
+  --ring: oklch(0.439 0 0);
+  --sidebar: oklch(0.145 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(0.269 0 0);
+  --sidebar-ring: oklch(0.439 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+/* macOS Drag Region */
+.macos-drag-region {
+  height: var(--titlebar-height);
+  -webkit-app-region: drag;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.titlebar-sidebar-toggle {
+  position: absolute;
+  top: 6px;
+  left: calc(var(--sidebar-width, 256px) - 28px);
+  z-index: 20;
+  -webkit-app-region: no-drag;
+  height: 20px;
+  width: 20px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--background) 85%, var(--muted));
+  color: var(--muted-foreground);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: left 200ms ease, color 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+.titlebar-sidebar-toggle.is-collapsed {
+  left: 128px;
+}
+.titlebar-sidebar-toggle:hover {
+  color: var(--foreground);
+  border-color: color-mix(in oklab, var(--border) 60%, var(--foreground));
+  background: color-mix(in oklab, var(--background) 70%, var(--muted));
+}
+
+.sidebar-padding {
+  padding-top: calc(var(--titlebar-height) + 4px);
+}
+
+/* Sidebar Scrollbar */
+.sidebar-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
+}
+
+/* Editor Style Fixes - Minimal enough */
+.cm-editor-obsidian .cm-editor {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+.cm-editor-obsidian .cm-content {
+  padding: 0 !important;
+  font-size: 16px;
+  line-height: 1.75;
+}
+.cm-editor-obsidian .cm-gutters {
+  display: none !important;
+}
+.cm-editor-obsidian .cm-editor.cm-focused {
+  outline: none !important;
+  box-shadow: none !important;
+}
+.cm-editor-obsidian .cm-activeLine,
+.cm-editor-obsidian .cm-activeLineGutter {
+  background: transparent !important;
+}
+.cm-editor-obsidian .cm-cursor {
+  border-left-color: var(--foreground) !important;
+}
+.cm-editor-obsidian .cm-dropCursor {
+  border-left-color: var(--foreground) !important;
+}
+.cm-editor-obsidian .cm-selectionBackground,
+.cm-editor-obsidian .cm-content ::selection {
+  background: color-mix(in oklab, var(--accent) 60%, transparent) !important;
+}
+
+.wmde-markdown {
+  background-color: transparent !important;
+  color: inherit !important;
+  font-family: inherit !important;
+  line-height: 1.7;
+}
+.wmde-markdown,
+.wmde-markdown * {
+  color: inherit;
+}
+.wmde-markdown a {
+  color: color-mix(in oklab, var(--foreground) 85%, var(--accent-foreground)) !important;
+}
+.wmde-markdown code {
+  background: color-mix(in oklab, var(--muted) 75%, transparent) !important;
+  color: var(--foreground) !important;
+  border-radius: 6px;
+  padding: 0.12rem 0.35rem;
+}
+.wmde-markdown pre {
+  background: color-mix(in oklab, var(--muted) 70%, var(--background)) !important;
+  color: var(--foreground) !important;
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+}
+.wmde-markdown pre code {
+  background: transparent !important;
+  padding: 0 !important;
+}
+.wmde-markdown hr {
+  border: 0 !important;
+  height: 1px;
+  background: var(--border);
+  margin: 1.5rem 0;
+}
+.wmde-markdown pre,
+.wmde-markdown blockquote,
+.wmde-markdown table {
+  border: none !important;
+  box-shadow: none !important;
+}
+.wmde-markdown blockquote {
+  border-left: 2px solid var(--border) !important;
+  margin-left: 0;
+  padding-left: 0.9rem;
+  color: var(--muted-foreground);
+}
+.wmde-markdown table {
+  background: transparent !important;
+  border-collapse: collapse;
+}
+.wmde-markdown table th,
+.wmde-markdown table td {
+  border-color: var(--border) !important;
+  color: var(--foreground) !important;
+}
+.wmde-markdown table thead tr {
+  /* Obsidian-like: subtle header tint in both light/dark */
+  background: color-mix(in oklab, var(--muted) 42%, var(--background)) !important;
+}
+.wmde-markdown table tbody tr {
+  background: transparent !important;
+}
+.wmde-markdown table tbody tr:nth-child(odd) > td {
+  /* Keep odd rows nearly flat */
+  background: color-mix(in oklab, var(--muted) 6%, var(--background)) !important;
+}
+.wmde-markdown table tbody tr:nth-child(even) > td {
+  /* Slightly stronger tint for zebra striping */
+  background: color-mix(in oklab, var(--muted) 12%, var(--background)) !important;
+}
+
+.note-editor-shell .cm-scroller,
+.note-editor-shell .wmde-markdown {
+  font-size: 16px;
+}
