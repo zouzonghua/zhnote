@@ -128,27 +128,27 @@ html, body, #root {
 .titlebar-sidebar-toggle {
   position: absolute;
   top: 6px;
-  left: calc(var(--sidebar-width, 256px) - 28px);
+  left: calc(var(--sidebar-width, 256px) - 48px);
   z-index: 20;
   -webkit-app-region: no-drag;
-  height: 20px;
-  width: 20px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: color-mix(in oklab, var(--background) 85%, var(--muted));
+  height: 36px;
+  width: 36px;
+  border-radius: 10px;
+  border: none;
+  background: color-mix(in oklab, var(--background) 72%, var(--muted));
   color: var(--muted-foreground);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: left 200ms ease, color 120ms ease, background-color 120ms ease, border-color 120ms ease;
+  transition: left 200ms ease, color 120ms ease, background-color 120ms ease, transform 120ms ease;
 }
 .titlebar-sidebar-toggle.is-collapsed {
-  left: 128px;
+  left: 108px;
 }
 .titlebar-sidebar-toggle:hover {
   color: var(--foreground);
-  border-color: color-mix(in oklab, var(--border) 60%, var(--foreground));
-  background: color-mix(in oklab, var(--background) 70%, var(--muted));
+  background: color-mix(in oklab, var(--background) 58%, var(--muted));
+  transform: translateY(-0.5px);
 }
 
 .sidebar-padding {
@@ -267,6 +267,10 @@ html, body, #root {
 .wmde-markdown table tbody tr:nth-child(even) > td {
   /* Slightly stronger tint for zebra striping */
   background: color-mix(in oklab, var(--muted) 12%, var(--background)) !important;
+}
+
+.wmde-markdown input[type="checkbox"] {
+  cursor: pointer;
 }
 
 .note-editor-shell .cm-scroller,

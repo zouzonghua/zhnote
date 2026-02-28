@@ -24,6 +24,23 @@ const extractText = (children: any): string => {
   return "";
 };
 
+type TaskLine = {
+  lineIndex: number;
+  checked: boolean;
+};
+
+const collectTaskLines = (markdownContent: string): TaskLine[] => {
+  const lines = markdownContent.split("\n");
+  const tasks: TaskLine[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^\s*[-*+]\s+\[( |x|X)\]\s+/.test(line)) {
+      tasks.push({ lineIndex: i, checked: /\[(x|X)\]/.test(line) });
+    }
+  }
+  return tasks;
+};
+
 const Mermaid = ({ chart }: { chart: string }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const id = useId().replace(/:/g, "");
@@ -74,12 +91,22 @@ const EditorContainer = memo(({ content, onChange, extensions, onCreateEditor }:
   />
 ));
 
-export function NoteEditor({ note, onChange, onDirtyChange, focusToken = 0 }: NoteEditorProps) {
+export function NoteEditor({
+  note,
+  onChange,
+  onDirtyChange,
+  focusToken = 0,
+  onStatus,
+  onStatsChange,
+  showFloatingStats = true,
+  reserveTrafficLightSpace = false,
+}: NoteEditorProps) {
   const { theme } = useTheme();
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content);
   const [mode, setMode] = useState<"edit" | "live" | "preview">("live");
   const editorViewRef = useRef<EditorView | null>(null);
+  const previewPaneRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (note.id) {
@@ -116,9 +143,13 @@ export function NoteEditor({ note, onChange, onDirtyChange, focusToken = 0 }: No
   const draft = useMemo(() => ({ ...note, title, content, updatedAt: Date.now() }), [note, title, content]);
 
   const saveDraft = useCallback(async () => {
-    if (!isDirty) return;
+    if (!isDirty) {
+      onStatus?.("No changes to save.", "info");
+      return;
+    }
     await onChange(draft);
-  }, [draft, isDirty, onChange]);
+    onStatus?.("Saved.", "success");
+  }, [draft, isDirty, onChange, onStatus]);
 
   useEffect(() => {
     onDirtyChange?.(draft, isDirty);
@@ -129,16 +160,32 @@ export function NoteEditor({ note, onChange, onDirtyChange, focusToken = 0 }: No
       const hotkey = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s";
       if (!hotkey) return;
       event.preventDefault();
+      onStatus?.("Shortcut triggered.", "info", "Cmd/Ctrl+S");
       void saveDraft();
     };
     window.addEventListener("keydown", handleSaveShortcut);
     return () => window.removeEventListener("keydown", handleSaveShortcut);
-  }, [saveDraft]);
+  }, [onStatus, saveDraft]);
 
   const extensions = useMemo(() => [
     markdown({ base: markdownLanguage, codeLanguages: languages }),
     EditorView.lineWrapping,
   ], []);
+
+  const taskLines = useMemo(() => collectTaskLines(content), [content]);
+
+  const toggleTaskByIndex = useCallback((taskIndex: number, nextChecked: boolean) => {
+    setContent((previous) => {
+      const task = collectTaskLines(previous)[taskIndex];
+      if (!task) return previous;
+      const lines = previous.split("\n");
+      const targetLine = lines[task.lineIndex];
+      if (!targetLine) return previous;
+      if (!/^\s*[-*+]\s+\[( |x|X)\]\s+/.test(targetLine)) return previous;
+      lines[task.lineIndex] = targetLine.replace(/\[( |x|X)\]/, nextChecked ? "[x]" : "[ ]");
+      return lines.join("\n");
+    });
+  }, []);
 
   const components = useMemo(() => ({
     code: ({ inline, className, children, ...props }: any) => {
@@ -148,8 +195,32 @@ export function NoteEditor({ note, onChange, onDirtyChange, focusToken = 0 }: No
         return <Mermaid chart={chartContent.trim()} />;
       }
       return <code className={className} {...props}>{children}</code>;
-    }
-  }), []);
+    },
+    input: ({ type, checked }: any) => {
+      if (type !== "checkbox") {
+        return <input type={type} defaultChecked={Boolean(checked)} readOnly />;
+      }
+      const interactive = mode === "live";
+
+      return (
+        <input
+          type="checkbox"
+          checked={Boolean(checked)}
+          data-task-checkbox="true"
+          disabled={!interactive}
+          onChange={(event) => {
+            if (!interactive) return;
+            const host = previewPaneRef.current;
+            if (!host) return;
+            const checkboxes = Array.from(host.querySelectorAll<HTMLInputElement>('input[type="checkbox"][data-task-checkbox="true"]'));
+            const taskIndex = checkboxes.indexOf(event.currentTarget);
+            if (taskIndex < 0 || taskIndex >= taskLines.length) return;
+            toggleTaskByIndex(taskIndex, event.currentTarget.checked);
+          }}
+        />
+      );
+    },
+  }), [mode, taskLines.length, toggleTaskByIndex]);
 
   const wordCount = useMemo(() => {
     const normalized = content.trim();
@@ -159,9 +230,20 @@ export function NoteEditor({ note, onChange, onDirtyChange, focusToken = 0 }: No
 
   const charCount = useMemo(() => content.length, [content]);
 
+  useEffect(() => {
+    onStatsChange?.(wordCount, charCount);
+  }, [charCount, onStatsChange, wordCount]);
+
   return (
-    <div className="note-editor-shell relative flex-1 flex flex-col min-h-0 bg-background">
-      <header className="flex items-center justify-end px-5 h-12 gap-1 pt-8 sm:pt-0">
+    <div className="note-editor-shell relative h-full flex-1 flex flex-col min-h-0 bg-background">
+      <header className={`flex items-center justify-between px-5 h-12 gap-3 pt-8 sm:pt-0 ${reserveTrafficLightSpace ? "pl-44" : ""}`}>
+        <input
+          type="text"
+          value={title}
+          onInput={(e: any) => setTitle(e.target.value)}
+          className="h-8 flex-1 min-w-0 text-2xl font-semibold tracking-tight bg-transparent border-none outline-none placeholder:opacity-20"
+          placeholder="Untitled"
+        />
         <div className="flex items-center gap-1">
           {isDirty && (
             <Button
@@ -206,20 +288,12 @@ export function NoteEditor({ note, onChange, onDirtyChange, focusToken = 0 }: No
 
       <div className="flex-1 overflow-y-auto">
         <div className={mode === "live" ? "w-full px-8 py-6" : "max-w-5xl mx-auto px-10 py-8"}>
-          <input
-            type="text"
-            value={title}
-            onInput={(e: any) => setTitle(e.target.value)}
-            className="text-4xl font-semibold tracking-tight bg-transparent border-none outline-none mb-8 w-full placeholder:opacity-20"
-            placeholder="Untitled"
-          />
-          
           <div className="min-h-[500px]">
             {mode === "preview" ? (
               <MDEditor.Markdown source={content} className="wmde-markdown" components={components} />
             ) : mode === "live" ? (
-              <div className="grid grid-cols-2 gap-10">
-                <div className="pr-2">
+              <div className="grid grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] gap-6 items-stretch">
+                <div className="pr-2 min-w-0">
                   <EditorContainer
                     content={content}
                     onChange={setContent}
@@ -229,8 +303,11 @@ export function NoteEditor({ note, onChange, onDirtyChange, focusToken = 0 }: No
                     }}
                   />
                 </div>
+                <div className="w-px bg-border/80 rounded-full" aria-hidden />
                 <div className="min-w-0 pl-2">
-                  <MDEditor.Markdown source={content} className="wmde-markdown" components={components} />
+                  <div ref={previewPaneRef}>
+                    <MDEditor.Markdown source={content} className="wmde-markdown" components={components} />
+                  </div>
                 </div>
               </div>
             ) : (
@@ -246,10 +323,12 @@ export function NoteEditor({ note, onChange, onDirtyChange, focusToken = 0 }: No
           </div>
         </div>
       </div>
-      <div className="pointer-events-none absolute right-4 bottom-3 z-20 rounded-md border bg-background/90 px-3 py-1.5 text-[13px] text-muted-foreground/85 backdrop-blur-sm flex items-center gap-4">
-        <span>{wordCount.toLocaleString()} 个词</span>
-        <span>{charCount.toLocaleString()} 个字符</span>
-      </div>
+      {showFloatingStats && (
+        <div className="pointer-events-none absolute right-4 bottom-3 z-20 rounded-md border bg-background/90 px-3 py-1.5 text-[13px] text-muted-foreground/85 backdrop-blur-sm flex items-center gap-4">
+          <span>{wordCount.toLocaleString()} 个词</span>
+          <span>{charCount.toLocaleString()} 个字符</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -259,4 +338,8 @@ interface NoteEditorProps {
   onChange: (note: Note) => Promise<void> | void;
   onDirtyChange?: (note: Note, dirty: boolean) => void;
   focusToken?: number;
+  onStatus?: (message: string, tone?: "info" | "success" | "error", shortcut?: string) => void;
+  onStatsChange?: (words: number, chars: number) => void;
+  showFloatingStats?: boolean;
+  reserveTrafficLightSpace?: boolean;
 }

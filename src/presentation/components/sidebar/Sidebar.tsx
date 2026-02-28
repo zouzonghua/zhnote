@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Search, Plus, FolderOpen, Settings } from "lucide-react";
+import { RefreshCw, Search, Plus, FolderOpen, Settings } from "lucide-react";
 import { Note } from "@/domain/entities/Note";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,8 @@ type SidebarProps = {
   onSearchQueryChange: (value: string) => void;
   onOpenFolder: () => void;
   onOpenSettings: () => void;
+  onSync: () => void | Promise<void>;
+  syncInProgress?: boolean;
   onCreateRootFile: () => void;
   onSelect: (note: Note) => void | Promise<void>;
   onActivate: (path: string) => void;
@@ -56,6 +58,8 @@ export function Sidebar({
   onSearchQueryChange,
   onOpenFolder,
   onOpenSettings,
+  onSync,
+  syncInProgress = false,
   onCreateRootFile,
   onSelect,
   onActivate,
@@ -81,6 +85,7 @@ export function Sidebar({
   const [pendingDeleteRequest, setPendingDeleteRequest] = useState<DeleteRequest | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const resizingRef = useRef(false);
+  const [treeVersion, setTreeVersion] = useState(0);
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const visibleNotes = useMemo(() => {
@@ -91,6 +96,10 @@ export function Sidebar({
   useEffect(() => {
     document.documentElement.style.setProperty("--sidebar-width", `${sidebarWidth}px`);
   }, [sidebarWidth]);
+
+  useEffect(() => {
+    setTreeVersion((current) => current + 1);
+  }, [notes]);
 
   useEffect(() => {
     if (focusToken === 0) return;
@@ -105,6 +114,23 @@ export function Sidebar({
     });
     return () => cancelAnimationFrame(id);
   }, [focusToken]);
+
+  const focusTreeKeyboardTarget = useCallback(() => {
+    const selected = document.querySelector<HTMLElement>('nav[role="tree"] [data-tree-node="true"][aria-selected="true"]');
+    if (selected) {
+      selected.focus();
+      return;
+    }
+    const firstItem = document.querySelector<HTMLElement>('nav[role="tree"] [data-tree-node="true"]');
+    firstItem?.focus();
+  }, []);
+
+  const handleSidebarMouseDownCapture = useCallback((event: React.MouseEvent<HTMLElement>) => {
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+    if (target.closest("input,button,[role='menu'],[data-slot='dropdown-menu-content']")) return;
+    requestAnimationFrame(() => focusTreeKeyboardTarget());
+  }, [focusTreeKeyboardTarget]);
 
   const requestDelete = useCallback((item: TreeItemMeta) => {
     return new Promise<void>((resolve) => {
@@ -163,18 +189,16 @@ export function Sidebar({
     <aside
       className="shrink-0 border-r bg-muted/20 flex flex-col sidebar-padding relative"
       style={{ width: `${sidebarWidth}px` }}
+      onMouseDownCapture={handleSidebarMouseDownCapture}
     >
       <div className="p-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-tight">Vault</h2>
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-7 w-7" title="Open Folder" onClick={onOpenFolder}>
-              <FolderOpen className="size-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7" title="New Note" onClick={onCreateRootFile}>
-              <Plus className="size-4" />
-            </Button>
-          </div>
+        <div className="flex items-center justify-end gap-1">
+          <Button variant="ghost" size="icon" className="h-7 w-7" title="Open Folder" onClick={onOpenFolder}>
+            <FolderOpen className="size-4" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7" title="New Note" onClick={onCreateRootFile}>
+            <Plus className="size-4" />
+          </Button>
         </div>
         <div className="relative">
           <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
@@ -189,7 +213,7 @@ export function Sidebar({
 
       <Separator className="opacity-50" />
 
-      <nav className="sidebar-scroll flex-1 overflow-y-auto p-2 space-y-0.5" role="tree" aria-label="Vault file tree">
+      <nav className="sidebar-scroll flex-1 overflow-y-auto p-2 space-y-0.5 select-none" role="tree" aria-label="Vault file tree">
         {loading ? (
           <div className="p-4 text-xs text-muted-foreground animate-pulse">Loading vault...</div>
         ) : visibleNotes.length === 0 ? (
@@ -214,21 +238,35 @@ export function Sidebar({
               onExport={onExport}
               onRenameDone={onRenameDone}
               onFocusHandled={onFocusHandled}
+              treeVersion={treeVersion}
             />
           ))
         )}
       </nav>
 
-      <div className="p-2 mt-auto border-t">
+      <div className="p-2 mt-auto">
+        <div className="flex items-center gap-1">
         <Button
           variant="ghost"
-          className="h-9 w-full justify-start gap-2 text-muted-foreground hover:text-foreground"
+          className="h-9 min-w-0 flex-1 justify-start gap-2 text-muted-foreground hover:text-foreground"
           title="Open settings (Cmd/Ctrl+,)"
           onClick={onOpenSettings}
         >
           <Settings className="size-4" />
           <span className="text-sm font-medium">Settings</span>
         </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground hover:text-foreground"
+            title="Sync notes"
+            aria-label="Sync notes"
+            onClick={() => void onSync()}
+            disabled={syncInProgress}
+          >
+            <RefreshCw className={`size-4 ${syncInProgress ? "animate-spin" : ""}`} />
+          </Button>
+        </div>
       </div>
 
       <Dialog open={!!pendingDeleteRequest} onOpenChange={handleDeleteDialogChange}>

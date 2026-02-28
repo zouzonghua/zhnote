@@ -1,9 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { Note } from "@/domain/entities/Note";
 import { FileSystemNoteRepository } from "@/data/repositories/FileSystemNoteRepository";
+import { GitChangeStatus, GitRepoInfo, GitSyncResult, GitSyncService } from "@/data/services/GitSyncService";
 import { open } from "@tauri-apps/plugin-dialog";
+import { invoke } from "@tauri-apps/api/core";
 
 const repository = new FileSystemNoteRepository();
+const gitService = new GitSyncService();
 
 export function useNotes() {
     const [notes, setNotes] = useState<Note[]>([]);
@@ -13,6 +16,8 @@ export function useNotes() {
     const refreshNotes = useCallback(async () => {
         setLoading(true);
         try {
+            const currentRoot = await repository.getRootPath();
+            setRootPath(currentRoot);
             const fetchedNotes = await repository.getNotes();
             setNotes(fetchedNotes);
         } catch (error) {
@@ -101,6 +106,44 @@ export function useNotes() {
         return await repository.exportItem(path, isFolder, selected);
     };
 
+    const getGitRepoInfo = useCallback(async (): Promise<GitRepoInfo> => {
+        const path = await repository.getRootPath();
+        setRootPath(path);
+        return await gitService.getRepoInfo(path);
+    }, []);
+
+    const initGitRepo = useCallback(async (): Promise<GitRepoInfo> => {
+        const path = await repository.getRootPath();
+        setRootPath(path);
+        return await gitService.initRepo(path);
+    }, []);
+
+    const setGitRemote = useCallback(async (remoteUrl: string): Promise<GitRepoInfo> => {
+        const path = await repository.getRootPath();
+        setRootPath(path);
+        return await gitService.setRemote(path, remoteUrl);
+    }, []);
+
+    const syncGitNotes = useCallback(async (commitMessage?: string): Promise<GitSyncResult> => {
+        const path = await repository.getRootPath();
+        setRootPath(path);
+        const result = await gitService.sync(path, commitMessage);
+        await refreshNotes();
+        return result;
+    }, [refreshNotes]);
+
+    const getGitChangeStatus = useCallback(async (): Promise<GitChangeStatus> => {
+        const path = await repository.getRootPath();
+        setRootPath(path);
+        return await gitService.getChangeStatus(path);
+    }, []);
+
+    const openRootInTerminal = useCallback(async () => {
+        const path = await repository.getRootPath();
+        setRootPath(path);
+        await invoke("open_in_terminal", { rootPath: path });
+    }, []);
+
     return {
         notes,
         loading,
@@ -116,5 +159,11 @@ export function useNotes() {
         renameItem,
         moveItem,
         exportItem,
+        getGitRepoInfo,
+        initGitRepo,
+        setGitRemote,
+        syncGitNotes,
+        getGitChangeStatus,
+        openRootInTerminal,
     };
 }

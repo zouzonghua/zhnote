@@ -15,6 +15,16 @@ import { isDescendantPath } from "./pathUtils";
 import { ExportHandler, MoveHandler, RenameHandler, TreeItemMeta } from "./types";
 
 const DRAG_ITEM_MIME = "application/x-zhnote-tree-item";
+const FOLDER_OPEN_STATE = new Map<string, boolean>();
+const FOLDER_CHILDREN_CACHE = new Map<string, Note[]>();
+
+const clearFolderCache = (folderPath: string) => {
+  for (const key of Array.from(FOLDER_CHILDREN_CACHE.keys())) {
+    if (key === folderPath || key.startsWith(`${folderPath}/`) || key.startsWith(`${folderPath}\\`)) {
+      FOLDER_CHILDREN_CACHE.delete(key);
+    }
+  }
+};
 
 type FileTreeItemProps = {
   note: Note;
@@ -34,6 +44,7 @@ type FileTreeItemProps = {
   onExport: ExportHandler;
   onRenameDone: (path: string) => void;
   onFocusHandled: (path: string) => void;
+  treeVersion?: number;
 };
 
 const getDragItem = (event: React.DragEvent): TreeItemMeta | null => {
@@ -66,36 +77,62 @@ export const FileTreeItem = memo(function FileTreeItem({
   onExport,
   onRenameDone,
   onFocusHandled,
+  treeVersion = 0,
 }: FileTreeItemProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [children, setChildren] = useState<Note[]>([]);
+  const initialChildren = note.isFolder ? (FOLDER_CHILDREN_CACHE.get(note.path) ?? []) : [];
+  const [isOpen, setIsOpen] = useState(() => (note.isFolder ? (FOLDER_OPEN_STATE.get(note.path) ?? false) : false));
+  const [children, setChildren] = useState<Note[]>(initialChildren);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasLoadedChildren, setHasLoadedChildren] = useState(() => initialChildren.length > 0);
   const [renameValue, setRenameValue] = useState(note.title);
   const [isDragOver, setIsDragOver] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const skipBlurSubmitRef = useRef(false);
+  const isLoadingRef = useRef(false);
+  const lastSyncedTreeVersionRef = useRef(treeVersion);
 
   const isSelected = activePath === note.path;
   const isRenaming = renamePath === note.path;
   const itemMeta: TreeItemMeta = { path: note.path, title: note.title, isFolder: note.isFolder };
 
+  const setOpenState = useCallback((next: boolean) => {
+    setIsOpen(next);
+    if (note.isFolder) {
+      FOLDER_OPEN_STATE.set(note.path, next);
+    }
+  }, [note.isFolder, note.path]);
+
   const loadSubNotes = useCallback(async () => {
-    if (isLoading) return;
+    if (isLoadingRef.current) return;
+    isLoadingRef.current = true;
     setIsLoading(true);
     try {
       const loaded = await onLoadChildren(note.path);
       setChildren(loaded);
-      setIsOpen(true);
+      FOLDER_CHILDREN_CACHE.set(note.path, loaded);
+      setOpenState(true);
     } finally {
+      setHasLoadedChildren(true);
       setIsLoading(false);
+      isLoadingRef.current = false;
     }
-  }, [isLoading, note.path, onLoadChildren]);
+  }, [note.path, onLoadChildren, setOpenState]);
 
   const refreshChildrenIfOpen = useCallback(async () => {
     if (!isOpen) return;
     await loadSubNotes();
   }, [isOpen, loadSubNotes]);
+
+  const handleCreateFileInside = useCallback(async () => {
+    await onCreateFile(note.path);
+    await refreshChildrenIfOpen();
+  }, [note.path, onCreateFile, refreshChildrenIfOpen]);
+
+  const handleCreateFolderInside = useCallback(async () => {
+    await onCreateFolder(note.path);
+    await refreshChildrenIfOpen();
+  }, [note.path, onCreateFolder, refreshChildrenIfOpen]);
 
   useEffect(() => {
     if (!isRenaming) return;
@@ -126,6 +163,26 @@ export const FileTreeItem = memo(function FileTreeItem({
     }
   }, [focusPath, isOpen, loadSubNotes, note, onActivate, onFocusHandled, onRequestRename, onSelect]);
 
+  useEffect(() => {
+    if (!note.isFolder || !isOpen || hasLoadedChildren || isLoading) return;
+    void loadSubNotes();
+  }, [hasLoadedChildren, isLoading, isOpen, loadSubNotes, note.isFolder]);
+
+  useEffect(() => {
+    if (!note.isFolder || !isOpen || !hasLoadedChildren || isLoading) return;
+    if (treeVersion === lastSyncedTreeVersionRef.current) return;
+    lastSyncedTreeVersionRef.current = treeVersion;
+    void loadSubNotes();
+  }, [hasLoadedChildren, isLoading, isOpen, loadSubNotes, note.isFolder, treeVersion]);
+
+  useEffect(() => {
+    if (!note.isFolder) return;
+    const cachedChildren = FOLDER_CHILDREN_CACHE.get(note.path);
+    if (!cachedChildren || cachedChildren.length === 0) return;
+    setChildren(cachedChildren);
+    setHasLoadedChildren(true);
+  }, [note.isFolder, note.path]);
+
   const handleToggle = async (e: React.MouseEvent) => {
     e.stopPropagation();
     onActivate(note.path);
@@ -133,23 +190,40 @@ export const FileTreeItem = memo(function FileTreeItem({
     if (!isOpen) {
       await loadSubNotes();
     } else {
-      setIsOpen(false);
+      setOpenState(false);
     }
   };
 
   const handleDeleteChild = useCallback(async (item: TreeItemMeta) => {
+    if (item.isFolder) {
+      clearFolderCache(item.path);
+    }
     await onDelete(item);
     await refreshChildrenIfOpen();
   }, [onDelete, refreshChildrenIfOpen]);
 
   const handleRenameChild = useCallback(async (item: TreeItemMeta, name: string) => {
     const renamed = await onRename(item, name);
+    if (item.isFolder && renamed && renamed !== item.path) {
+      const cached = FOLDER_CHILDREN_CACHE.get(item.path);
+      clearFolderCache(item.path);
+      if (cached) {
+        FOLDER_CHILDREN_CACHE.set(renamed, cached);
+      }
+    }
     await refreshChildrenIfOpen();
     return renamed;
   }, [onRename, refreshChildrenIfOpen]);
 
   const handleMoveChild = useCallback(async (item: TreeItemMeta, targetFolderPath: string) => {
     const movedPath = await onMove(item, targetFolderPath);
+    if (item.isFolder && movedPath && movedPath !== item.path) {
+      const cached = FOLDER_CHILDREN_CACHE.get(item.path);
+      clearFolderCache(item.path);
+      if (cached) {
+        FOLDER_CHILDREN_CACHE.set(movedPath, cached);
+      }
+    }
     await refreshChildrenIfOpen();
     return movedPath;
   }, [onMove, refreshChildrenIfOpen]);
@@ -162,8 +236,8 @@ export const FileTreeItem = memo(function FileTreeItem({
       return;
     }
 
-    await onRename({ path: note.path, title: note.title, isFolder: note.isFolder }, nextName);
-    onRenameDone(note.path);
+    const renamedPath = await onRename({ path: note.path, title: note.title, isFolder: note.isFolder }, nextName);
+    onRenameDone(renamedPath || note.path);
   }, [note.isFolder, note.path, note.title, onRename, onRenameDone, renameValue]);
 
   const cancelRename = useCallback(() => {
@@ -268,7 +342,7 @@ export const FileTreeItem = memo(function FileTreeItem({
     if (isLeft) {
       event.preventDefault();
       if (note.isFolder && isOpen) {
-        setIsOpen(false);
+        setOpenState(false);
         return;
       }
       const currentLevel = Number(current.dataset.level || level);
@@ -287,7 +361,7 @@ export const FileTreeItem = memo(function FileTreeItem({
       event.preventDefault();
       if (note.isFolder) {
         if (isOpen) {
-          setIsOpen(false);
+          setOpenState(false);
         } else {
           await loadSubNotes();
         }
@@ -354,10 +428,10 @@ export const FileTreeItem = memo(function FileTreeItem({
         </DropdownMenuItem>
         {note.isFolder && (
           <>
-            <DropdownMenuItem onSelect={() => void onCreateFile(note.path)}>
+            <DropdownMenuItem onSelect={() => void handleCreateFileInside()}>
               <FilePlus className="size-4" /> 新建文件
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => void onCreateFolder(note.path)}>
+            <DropdownMenuItem onSelect={() => void handleCreateFolderInside()}>
               <FolderPlus className="size-4" /> 新建文件夹
             </DropdownMenuItem>
           </>
@@ -378,11 +452,6 @@ export const FileTreeItem = memo(function FileTreeItem({
       <div className="flex flex-col" onContextMenu={handleContextMenu}>
         <div
           onClick={handleToggle}
-          onDoubleClick={(e) => {
-            e.stopPropagation();
-            onActivate(note.path);
-            onRequestRename(note.path);
-          }}
           onDragOver={handleFolderDragOver}
           onDragLeave={() => setIsDragOver(false)}
           onDrop={(e) => void handleFolderDrop(e)}
@@ -441,6 +510,7 @@ export const FileTreeItem = memo(function FileTreeItem({
                   onExport={onExport}
                   onRenameDone={onRenameDone}
                   onFocusHandled={onFocusHandled}
+                  treeVersion={treeVersion}
                 />
               ))
             )}
@@ -456,11 +526,6 @@ export const FileTreeItem = memo(function FileTreeItem({
         onClick={() => {
           onActivate(note.path);
           void onSelect(note);
-        }}
-        onDoubleClick={(e) => {
-          e.stopPropagation();
-          onActivate(note.path);
-          onRequestRename(note.path);
         }}
         draggable={!isRenaming}
         onDragStart={handleDragStart}
