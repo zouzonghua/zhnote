@@ -1,26 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
+import { GitChangeStatus, GitRepoInfo, GitService, GitSyncResult } from "@/domain/services/GitService";
 
-export type GitRepoInfo = {
-  isRepo: boolean;
-  branch?: string | null;
-  remoteUrl?: string | null;
-};
-
-export type GitSyncResult = {
-  branch: string;
-  committed: boolean;
-  clean: boolean;
-  pullOutput: string;
-  pushOutput: string;
-};
-
-export type GitChangeStatus = {
-  isRepo: boolean;
-  hasRemote: boolean;
-  hasChanges: boolean;
-};
-
-export class GitSyncService {
+export class GitSyncService implements GitService {
   async getRepoInfo(rootPath: string): Promise<GitRepoInfo> {
     return invoke<GitRepoInfo>("git_get_repo_info", { rootPath });
   }

@@ -1,8 +1,9 @@
 import { readDir, readFile, writeFile, mkdir, exists, remove, rename } from "@tauri-apps/plugin-fs";
 import { appDataDir, join, dirname, basename } from "@tauri-apps/api/path";
 import { Note } from "@/domain/entities/Note";
+import { NoteRepository } from "@/domain/repositories/NoteRepository";
 
-export class FileSystemNoteRepository {
+export class FileSystemNoteRepository implements NoteRepository {
     private rootPath: string | null = null;
     private BLACKLIST = ["node_modules", ".git", "dist", "target", "build", ".husky", ".vscode"];
 

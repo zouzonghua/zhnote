@@ -1,17 +1,25 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { lazy, Suspense, useState, useCallback, useEffect, useRef } from "react";
 import { ChevronLeft, FileText } from "lucide-react";
 import { useNotes } from "@/presentation/hooks/useNotes";
 import { useTheme } from "@/presentation/hooks/useTheme";
-import { NoteEditor } from "@/presentation/components/NoteEditor";
 import { Sidebar } from "@/presentation/components/sidebar/Sidebar";
-import { SystemSettingsDialog } from "@/presentation/components/settings/SystemSettingsDialog";
 import { StatusBar } from "@/presentation/components/StatusBar";
 import { isDescendantPath, isSameOrDescendant } from "@/presentation/components/sidebar/pathUtils";
 import { TreeItemMeta } from "@/presentation/components/sidebar/types";
 import { Note } from "@/domain/entities/Note";
+import { GitSyncResult } from "@/domain/services/GitService";
 import { Button } from "@/components/ui/button";
-import { GitSyncResult } from "@/data/services/GitSyncService";
 import "./App.css";
+
+const NoteEditor = lazy(async () => {
+  const module = await import("@/presentation/components/NoteEditor");
+  return { default: module.NoteEditor };
+});
+
+const SystemSettingsDialog = lazy(async () => {
+  const module = await import("@/presentation/components/settings/SystemSettingsDialog");
+  return { default: module.SystemSettingsDialog };
+});
 
 function App() {
   const {
@@ -412,16 +420,24 @@ function App() {
         <main className="flex-1 min-w-0 min-h-0 overflow-hidden flex flex-col bg-background">
           <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
             {activeNote ? (
-              <NoteEditor
-                note={activeNote}
-                onChange={handleSaveActiveNote}
-              onDirtyChange={handleDraftChange}
-              focusToken={editorFocusToken}
-              onStatus={pushStatus}
-              onStatsChange={handleEditorStatsChange}
-              showFloatingStats={!statusBarVisible}
-              reserveTrafficLightSpace={sidebarCollapsed}
-            />
+              <Suspense
+                fallback={(
+                  <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+                    Loading editor...
+                  </div>
+                )}
+              >
+                <NoteEditor
+                  note={activeNote}
+                  onChange={handleSaveActiveNote}
+                  onDirtyChange={handleDraftChange}
+                  focusToken={editorFocusToken}
+                  onStatus={pushStatus}
+                  onStatsChange={handleEditorStatsChange}
+                  showFloatingStats={!statusBarVisible}
+                  reserveTrafficLightSpace={sidebarCollapsed}
+                />
+              </Suspense>
             ) : (
               <div className="h-full flex flex-col items-center justify-center opacity-40 select-none">
                 <FileText className="size-16 mb-4" />
@@ -434,19 +450,20 @@ function App() {
           </div>
           {statusBarVisible && <StatusBar message={statusMessage} tone={statusTone} shortcut={statusShortcut} stats={editorStats} />}
         </main>
-
-        <SystemSettingsDialog
-          open={settingsOpen}
-          onOpenChange={setSettingsOpen}
-          rootPath={rootPath}
-          theme={theme}
-          setTheme={setTheme}
-          onGetGitRepoInfo={getGitRepoInfo}
-          onInitGitRepo={initGitRepo}
-          onSetGitRemote={setGitRemote}
-          onSyncGitNotes={handleSyncNotes}
-          syncInProgress={gitSyncing}
-        />
+        <Suspense fallback={null}>
+          <SystemSettingsDialog
+            open={settingsOpen}
+            onOpenChange={setSettingsOpen}
+            rootPath={rootPath}
+            theme={theme}
+            setTheme={setTheme}
+            onGetGitRepoInfo={getGitRepoInfo}
+            onInitGitRepo={initGitRepo}
+            onSetGitRemote={setGitRemote}
+            onSyncGitNotes={handleSyncNotes}
+            syncInProgress={gitSyncing}
+          />
+        </Suspense>
     </div>
   );
 }

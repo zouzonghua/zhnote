@@ -1,9 +1,8 @@
 import { Note } from "@/domain/entities/Note";
-import { NoteRepository } from "@/domain/repositories/NoteRepository";
 
 const STORAGE_KEY = "notes_data";
 
-export class LocalNoteRepository implements NoteRepository {
+export class LocalNoteRepository {
     async getNotes(): Promise<Note[]> {
         const data = localStorage.getItem(STORAGE_KEY);
         if (!data) {

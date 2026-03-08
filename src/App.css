@@ -277,3 +277,24 @@ html, body, #root {
 .note-editor-shell .wmde-markdown {
   font-size: 16px;
 }
+
+.pdf-export-root {
+  position: fixed;
+  left: -200vw;
+  top: 0;
+  width: min(1024px, 88vw);
+  pointer-events: none;
+  opacity: 0;
+  z-index: -1;
+}
+
+.pdf-export-content {
+  width: 100%;
+  padding: 24px 28px;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+html[data-export-pdf="true"] .pdf-export-root {
+  opacity: 1;
+}

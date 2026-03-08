@@ -4,8 +4,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Theme } from "@/presentation/hooks/useTheme";
-import { GitRepoInfo, GitSyncResult } from "@/data/services/GitSyncService";
 import { useEffect, useState } from "react";
+import { GitRepoInfo, GitSyncResult } from "@/domain/services/GitService";
 
 type SystemSettingsDialogProps = {
   open: boolean;

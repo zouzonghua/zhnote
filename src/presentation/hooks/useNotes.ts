@@ -1,12 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { Note } from "@/domain/entities/Note";
-import { FileSystemNoteRepository } from "@/data/repositories/FileSystemNoteRepository";
-import { GitChangeStatus, GitRepoInfo, GitSyncResult, GitSyncService } from "@/data/services/GitSyncService";
+import { createNoteWorkspaceService } from "@/application/factories/createNoteWorkspaceService";
+import { GitChangeStatus, GitRepoInfo, GitSyncResult } from "@/domain/services/GitService";
 import { open } from "@tauri-apps/plugin-dialog";
-import { invoke } from "@tauri-apps/api/core";
 
-const repository = new FileSystemNoteRepository();
-const gitService = new GitSyncService();
+const workspaceService = createNoteWorkspaceService();
 
 export function useNotes() {
     const [notes, setNotes] = useState<Note[]>([]);
@@ -16,9 +14,9 @@ export function useNotes() {
     const refreshNotes = useCallback(async () => {
         setLoading(true);
         try {
-            const currentRoot = await repository.getRootPath();
+            const currentRoot = await workspaceService.getRootPath();
             setRootPath(currentRoot);
-            const fetchedNotes = await repository.getNotes();
+            const fetchedNotes = await workspaceService.listNotes();
             setNotes(fetchedNotes);
         } catch (error) {
             console.error("Failed to load notes:", error);
@@ -38,9 +36,9 @@ export function useNotes() {
                 multiple: false,
             });
             if (selected && typeof selected === "string") {
-                await repository.setRootPath(selected);
+                await workspaceService.selectRootPath(selected);
                 setRootPath(selected);
-                refreshNotes();
+                await refreshNotes();
             }
         } catch (error) {
             console.error("Folder picker error:", error);
@@ -48,12 +46,12 @@ export function useNotes() {
     };
 
     const loadFolderChildren = async (path: string): Promise<Note[]> => {
-        return await repository.getNotes(path);
+        return await workspaceService.listNotes(path);
     };
 
     const loadContent = async (path: string) => {
         try {
-            return await repository.loadNoteContent(path);
+            return await workspaceService.loadNoteContent(path);
         } catch (error) {
             console.error("Load content error:", error);
             return "";
@@ -61,36 +59,34 @@ export function useNotes() {
     };
 
     const updateNote = async (note: Note) => {
-        await repository.saveNote(note);
+        await workspaceService.saveNote(note);
     };
 
     const createNote = async (parentPath?: string) => {
-        const path = parentPath || await repository.getRootPath();
-        const newPath = await repository.createFile(path, "Untitled Note");
+        const newPath = await workspaceService.createNote(parentPath);
         await refreshNotes();
         return newPath;
     };
 
     const createFolder = async (parentPath?: string) => {
-        const path = parentPath || await repository.getRootPath();
-        const newPath = await repository.createFolder(path, "New Folder");
+        const newPath = await workspaceService.createFolder(parentPath);
         await refreshNotes();
         return newPath;
     };
 
     const deleteItem = async (path: string) => {
-        await repository.deleteItem(path);
+        await workspaceService.deleteItem(path);
         await refreshNotes();
     };
 
     const renameItem = async (path: string, name: string, isFolder: boolean) => {
-        const newPath = await repository.renameItem(path, name, isFolder);
+        const newPath = await workspaceService.renameItem(path, name, isFolder);
         await refreshNotes();
         return newPath;
     };
 
     const moveItem = async (path: string, targetFolderPath: string, isFolder: boolean) => {
-        const newPath = await repository.moveItem(path, targetFolderPath, isFolder);
+        const newPath = await workspaceService.moveItem(path, targetFolderPath, isFolder);
         await refreshNotes();
         return newPath;
     };
@@ -103,45 +99,45 @@ export function useNotes() {
         });
 
         if (!selected || typeof selected !== "string") return;
-        return await repository.exportItem(path, isFolder, selected);
+        return await workspaceService.exportItem(path, isFolder, selected);
     };
 
     const getGitRepoInfo = useCallback(async (): Promise<GitRepoInfo> => {
-        const path = await repository.getRootPath();
+        const path = await workspaceService.getRootPath();
         setRootPath(path);
-        return await gitService.getRepoInfo(path);
+        return await workspaceService.getGitRepoInfo();
     }, []);
 
     const initGitRepo = useCallback(async (): Promise<GitRepoInfo> => {
-        const path = await repository.getRootPath();
+        const path = await workspaceService.getRootPath();
         setRootPath(path);
-        return await gitService.initRepo(path);
+        return await workspaceService.initGitRepo();
     }, []);
 
     const setGitRemote = useCallback(async (remoteUrl: string): Promise<GitRepoInfo> => {
-        const path = await repository.getRootPath();
+        const path = await workspaceService.getRootPath();
         setRootPath(path);
-        return await gitService.setRemote(path, remoteUrl);
+        return await workspaceService.setGitRemote(remoteUrl);
     }, []);
 
     const syncGitNotes = useCallback(async (commitMessage?: string): Promise<GitSyncResult> => {
-        const path = await repository.getRootPath();
+        const path = await workspaceService.getRootPath();
         setRootPath(path);
-        const result = await gitService.sync(path, commitMessage);
+        const result = await workspaceService.syncGitNotes(commitMessage);
         await refreshNotes();
         return result;
     }, [refreshNotes]);
 
     const getGitChangeStatus = useCallback(async (): Promise<GitChangeStatus> => {
-        const path = await repository.getRootPath();
+        const path = await workspaceService.getRootPath();
         setRootPath(path);
-        return await gitService.getChangeStatus(path);
+        return await workspaceService.getGitChangeStatus();
     }, []);
 
     const openRootInTerminal = useCallback(async () => {
-        const path = await repository.getRootPath();
+        const path = await workspaceService.getRootPath();
         setRootPath(path);
-        await invoke("open_in_terminal", { rootPath: path });
+        await workspaceService.openRootInTerminal();
     }, []);
 
     return {
